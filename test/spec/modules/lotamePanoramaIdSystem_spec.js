@@ -440,10 +440,67 @@ describe('LotameId', function() {
     });
   });
 
-  it('should retrieve the id when decode is called', function() {
-    var id = lotamePanoramaIdSubmodule.decode('1234');
-    expect(id).to.be.eql({
-      'lotamePanoramaId': '1234'
+  describe('when gdpr applies and falls back to eupubconsent cookie', function () {
+    let request;
+    let callBackSpy = sinon.spy();
+    let consentData = {
+      gdprApplies: true,
+      consentString: undefined
+    };
+
+    beforeEach(function () {
+      getCookieStub
+        .withArgs('eupubconsent-v2')
+        .returns('consentGiven');
+
+      let submoduleCallback = lotamePanoramaIdSubmodule.getId({}, consentData).callback;
+      submoduleCallback(callBackSpy);
+
+      // the contents of the response don't matter for this
+      request = server.requests[0];
+      request.respond(200, responseHeader, '');
+    });
+
+    it('should call the remote server when getId is called', function () {
+      expect(callBackSpy.calledOnce).to.be.true;
+    });
+
+    it('should pass the gdpr consent string back', function() {
+      expect(request.url).to.be.eq(
+        'https://id.crwdcntrl.net/id?gdpr_applies=true&gdpr_consent=consentGiven'
+      );
+    });
+  });
+
+  describe('when gdpr applies and falls back to euconsent cookie', function () {
+    let request;
+    let callBackSpy = sinon.spy();
+    let consentData = {
+      gdprApplies: true,
+      consentString: undefined
+    };
+
+    beforeEach(function () {
+      getCookieStub
+        .withArgs('euconsent-v2')
+        .returns('consentGiven');
+
+      let submoduleCallback = lotamePanoramaIdSubmodule.getId({}, consentData).callback;
+      submoduleCallback(callBackSpy);
+
+      // the contents of the response don't matter for this
+      request = server.requests[0];
+      request.respond(200, responseHeader, '');
+    });
+
+    it('should call the remote server when getId is called', function () {
+      expect(callBackSpy.calledOnce).to.be.true;
+    });
+
+    it('should pass the gdpr consent string back', function() {
+      expect(request.url).to.be.eq(
+        'https://id.crwdcntrl.net/id?gdpr_applies=true&gdpr_consent=consentGiven'
+      );
     });
   });
 });
