@@ -188,15 +188,15 @@ export const lotamePanoramaIdSubmodule = {
 
       if (consentData && utils.isBoolean(consentData.gdprApplies)) {
         queryParams.gdpr_applies = consentData.gdprApplies;
-        if (consentData.gdprApplies) {
-          let consentString = consentData.consentString;
-          // If no consent string in the data, try to read it from 1st party cookies
-          if (!consentString) {
-            consentString = getFromStorage('eupubconsent-v2');
-          }
-          if (!consentString) {
-            consentString = getFromStorage('euconsent-v2');
-          }
+        let consentString = consentData.consentString;
+        // If no consent string in the data, try to read it from 1st party cookies
+        if (!consentString) {
+          consentString = getFromStorage('eupubconsent-v2');
+        }
+        if (!consentString) {
+          consentString = getFromStorage('euconsent-v2');
+        }
+        if (consentString) {
           queryParams.gdpr_consent = consentString;
         }
       }

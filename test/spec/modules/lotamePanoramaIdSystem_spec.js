@@ -503,4 +503,32 @@ describe('LotameId', function() {
       );
     });
   });
+
+  describe('when gdpr applies but no consent string is available', function () {
+    let request;
+    let callBackSpy = sinon.spy();
+    let consentData = {
+      gdprApplies: true,
+      consentString: undefined
+    };
+
+    beforeEach(function () {
+      let submoduleCallback = lotamePanoramaIdSubmodule.getId({}, consentData).callback;
+      submoduleCallback(callBackSpy);
+
+      // the contents of the response don't matter for this
+      request = server.requests[0];
+      request.respond(200, responseHeader, '');
+    });
+
+    it('should call the remote server when getId is called', function () {
+      expect(callBackSpy.calledOnce).to.be.true;
+    });
+
+    it('should not include the gdpr consent string on the url', function() {
+      expect(request.url).to.be.eq(
+        'https://id.crwdcntrl.net/id?gdpr_applies=true'
+      );
+    });
+  });
 });
