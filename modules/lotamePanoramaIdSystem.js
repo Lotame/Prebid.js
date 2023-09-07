@@ -31,6 +31,10 @@ const MISSING_CORE_CONSENT = 111;
 const GVLID = 95;
 const ID_HOST = 'id.crwdcntrl.net';
 const ID_HOST_COOKIELESS = 'c.ltmsphrcl.net';
+// Note: using DEV endpoints for these for the moment. These should eventually
+// be PROD urls, we do a find/replace in the build script for other environments
+const DATA_HOST = 'bcp.st.dev.lotame.com';
+const DATA_HOST_COOKIELESS = 'c.st.dev.lotame-cookie-nerf.net';
 
 export const storage = getStorageManager({moduleType: MODULE_TYPE_UID, moduleName: MODULE_NAME});
 let cookieDomain;
@@ -159,6 +163,169 @@ function getLotameLocalCache(clientId = undefined) {
   return cache;
 }
 
+function getConsentParameters(consentData) {
+  const params = {};
+  const usp = uspDataHandler.getConsentData();
+
+  let usPrivacy;
+  if (typeof usp !== 'undefined' && !isEmpty(usp) && !isEmptyStr(usp)) {
+    usPrivacy = usp;
+  }
+  if (!usPrivacy) {
+    // fallback to 1st party cookie
+    usPrivacy = getFromStorage('us_privacy');
+  }
+  if (usPrivacy) {
+    params.us_privacy = usPrivacy;
+  }  
+
+  let consentString;
+  if (consentData) {
+    if (isBoolean(consentData.gdprApplies)) {
+      params.gdpr_applies = consentData.gdprApplies;
+    }
+    consentString = consentData.consentString;
+  }
+  // If no consent string, try to read it from 1st party cookies
+  if (!consentString) {
+    consentString = getFromStorage('eupubconsent-v2');
+  }
+  if (!consentString) {
+    consentString = getFromStorage('euconsent-v2');
+  }
+  if (consentString) {
+    params.gdpr_consent = consentString;
+  }
+
+  return params;
+}
+
+function getCurrentPanoId(localCache) {
+  const hasExpiredPanoId = Date.now() > localCache.expiryTimestampMs;
+  if (!hasExpiredPanoId && !isEmpty(localCache.data)) {
+    return localCache.data;
+  }
+}
+
+function useCookieless() {
+  return navigator.userAgent && navigator.userAgent.indexOf('Safari') != -1 && navigator.userAgent.indexOf('Chrome') == -1;
+}
+
+function getRequestHost() {
+  return useCookieless() ? ID_HOST_COOKIELESS : ID_HOST;
+}
+
+function processResponseIDs({
+  profileId,
+  coreId,
+  clientId,
+  noConsent,
+  expiry,
+  consentIsErrorFree
+}) {
+  const hasCustomClientId = !isEmpty(clientId);
+  let storedCoreId;
+  if (hasCustomClientId) {
+    if (consentIsErrorFree) {
+      clearLotameCache(`${KEY_EXPIRY}_${clientId}`);
+    } else if (isStr(noConsent) && noConsent === 'CLIENT') {
+      saveLotameCache(`${KEY_EXPIRY}_${clientId}`, expiry, expiry);
+      // End Processing
+      return;
+    }
+  }
+
+  saveLotameCache(KEY_EXPIRY, expiry, expiry);
+
+  if (isStr(profileId)) {
+    if (consentIsErrorFree) {
+      setProfileId(profileId);
+    }
+
+    if (isStr(coreId)) {
+      saveLotameCache(KEY_ID, coreId, expiry);
+      storedCoreId = coreId;
+    } else {
+      clearLotameCache(KEY_ID);
+    }
+  } else {
+    if (consentIsErrorFree) {
+      clearLotameCache(KEY_PROFILE);
+    }
+    clearLotameCache(KEY_ID);
+  }
+  return storedCoreId;
+}
+
+function sendUserData(configParams, consentData) {
+  const clientId = configParams.clientId;
+  const hasCustomClientId = !isEmpty(clientId);
+  
+  let hem = isEmpty(configParams.hems) ? undefined : configParams.hems;
+  if (isArray(hem)) {
+    hem = hem.length > 0 ? hem[0] : undefined;
+  }
+
+  if (!isEmpty(clientId) && !isEmpty(hem)) {
+    // note: may have to expose this for testing?
+    const requestHost = useCookieless() ? DATA_HOST_COOKIELESS : DATA_HOST;
+    const url = buildUrl({
+      protocol: 'https',
+      host: 'lightning.com-local', // requestHost,
+      pathname: '/src/test/generated-html/prebid-HEM-response.js', // '/sendMahData'
+    });
+
+    // just an idea
+    const payload = {
+      "c": clientId,
+      "did": hem
+    };
+  
+    ajax(
+      url,
+      {
+        success: (response, q) => {
+          let coreId;
+          if (response) {
+            // Note: This is the same as the code for handling the /id endpoint response.
+            //       If that continues to be true, we can consolidate.
+            try {
+              let responseObj = Object.assign({}, JSON.parse(response));
+              const consentIsErrorFree = !(
+                isArray(responseObj.errors) &&
+                responseObj.errors.indexOf(MISSING_CORE_CONSENT) !== -1
+              );
+
+              const options = {
+                profileId: responseObj?.profile_id,
+                coreId: responseObj?.core_id,
+                clientId: clientId,
+                noConsent: responseObj?.no_consent,
+                expiry: responseObj?.expiry_ts,
+                consentIsErrorFree: consentIsErrorFree,
+              };
+              coreId = processResponseIDs(options);
+            } catch (error) {
+              logError(error);
+            }
+          }
+        },
+        error: () => {
+          // Temporary during development
+          console.error('sendUserData::error');
+        }
+      },
+      payload,
+      {
+        method: 'POST'
+        // TODO: do I need this?
+        // ,
+        // withCredentials: true,
+      }
+    );
+  }
+}
+
 /**
  * Clear a cached value from cookies and local storage
  * @param {String} key
@@ -221,8 +388,6 @@ export const lotamePanoramaIdSubmodule = {
     const hasCustomClientId = !isEmpty(clientId);
     const localCache = getLotameLocalCache(clientId);
 
-    const hasExpiredPanoId = Date.now() > localCache.expiryTimestampMs;
-
     if (hasCustomClientId) {
       const hasFreshClientNoConsent = Date.now() < localCache.clientExpiryTimestampMs;
       if (hasFreshClientNoConsent) {
@@ -234,67 +399,36 @@ export const lotamePanoramaIdSubmodule = {
       }
     }
 
-    if (!hasExpiredPanoId) {
+    sendUserData(configParams);
+
+    const currentPanoId = getCurrentPanoId(localCache);
+    if (!isEmpty(currentPanoId)) {
       return {
-        id: localCache.data,
+        id: currentPanoId,
       };
     }
 
     const storedUserId = getProfileId();
 
-    // Add CCPA Consent data handling
-    const usp = uspDataHandler.getConsentData();
-
-    let usPrivacy;
-    if (typeof usp !== 'undefined' && !isEmpty(usp) && !isEmptyStr(usp)) {
-      usPrivacy = usp;
-    }
-    if (!usPrivacy) {
-      // fallback to 1st party cookie
-      usPrivacy = getFromStorage('us_privacy');
-    }
-
-    const getRequestHost = function() {
-      if (navigator.userAgent && navigator.userAgent.indexOf('Safari') != -1 && navigator.userAgent.indexOf('Chrome') == -1) {
-        return ID_HOST_COOKIELESS;
-      }
-      return ID_HOST;
-    }
-
     const resolveIdFunction = function (callback) {
+      const currentPanoId = getCurrentPanoId(localCache);
+      if (!isEmpty(currentPanoId)) {
+        callback(currentPanoId);
+        return;
+      }
+
       let queryParams = {};
       if (storedUserId) {
         queryParams.fp = storedUserId;
       }
-
-      let consentString;
-      if (consentData) {
-        if (isBoolean(consentData.gdprApplies)) {
-          queryParams.gdpr_applies = consentData.gdprApplies;
-        }
-        consentString = consentData.consentString;
-      }
-      // If no consent string, try to read it from 1st party cookies
-      if (!consentString) {
-        consentString = getFromStorage('eupubconsent-v2');
-      }
-      if (!consentString) {
-        consentString = getFromStorage('euconsent-v2');
-      }
-      if (consentString) {
-        queryParams.gdpr_consent = consentString;
-      }
-
-      // Add usPrivacy to the url
-      if (usPrivacy) {
-        queryParams.us_privacy = usPrivacy;
-      }
-
-      // Add clientId to the url
       if (hasCustomClientId) {
         queryParams.c = clientId;
       }
+      Object.assign(queryParams, getConsentParameters(consentData));
 
+      // Note: during development I was using
+      // host: 'lightning.com-local',
+      // pathname: '/src/test/generated-html/prebid-ID-response.js'
       const url = buildUrl({
         protocol: 'https',
         host: getRequestHost(),
@@ -307,51 +441,21 @@ export const lotamePanoramaIdSubmodule = {
           let coreId;
           if (response) {
             try {
-              let responseObj = JSON.parse(response);
-              const hasNoConsentErrors = !(
+              let responseObj = Object.assign({}, JSON.parse(response));
+              const consentIsErrorFree = !(
                 isArray(responseObj.errors) &&
                 responseObj.errors.indexOf(MISSING_CORE_CONSENT) !== -1
               );
 
-              if (hasCustomClientId) {
-                if (hasNoConsentErrors) {
-                  clearLotameCache(`${KEY_EXPIRY}_${clientId}`);
-                } else if (isStr(responseObj.no_consent) && responseObj.no_consent === 'CLIENT') {
-                  saveLotameCache(
-                    `${KEY_EXPIRY}_${clientId}`,
-                    responseObj.expiry_ts,
-                    responseObj.expiry_ts
-                  );
-
-                  // End Processing
-                  callback();
-                  return;
-                }
-              }
-
-              saveLotameCache(KEY_EXPIRY, responseObj.expiry_ts, responseObj.expiry_ts);
-
-              if (isStr(responseObj.profile_id)) {
-                if (hasNoConsentErrors) {
-                  setProfileId(responseObj.profile_id);
-                }
-
-                if (isStr(responseObj.core_id)) {
-                  saveLotameCache(
-                    KEY_ID,
-                    responseObj.core_id,
-                    responseObj.expiry_ts
-                  );
-                  coreId = responseObj.core_id;
-                } else {
-                  clearLotameCache(KEY_ID);
-                }
-              } else {
-                if (hasNoConsentErrors) {
-                  clearLotameCache(KEY_PROFILE);
-                }
-                clearLotameCache(KEY_ID);
-              }
+              const options = {
+                profileId: responseObj?.profile_id,
+                coreId: responseObj?.core_id,
+                clientId: clientId,
+                noConsent: responseObj?.no_consent,
+                expiry: responseObj?.expiry_ts,
+                consentIsErrorFree: consentIsErrorFree,
+              };
+              coreId = processResponseIDs(options);
             } catch (error) {
               logError(error);
             }
