@@ -101,7 +101,13 @@ function getFromStorage(key) {
     if (storedValueExp === '' || storedValueExp === null) {
       value = storage.getDataFromLocalStorage(key, undefined);
     } else if (storedValueExp) {
-      if ((new Date(parseInt(storedValueExp, 10))).getTime() - Date.now() > 0) {
+      let expDate = undefined;
+      if (/^\d+$/.test(storedValueExp)) {
+        expDate = new Date(parseInt(storedValueExp, 10));
+      } else {
+        expDate = new Date(storedValueExp);
+      }
+      if (expDate && !isNaN(expDate) && expDate.getTime() - Date.now() > 0) { 
         value = storage.getDataFromLocalStorage(key, undefined);
       }
     }
