@@ -38,14 +38,15 @@ const MISSING_CORE_CONSENT = 111;
 const GVLID = 95;
 const ID_HOST = 'id.crwdcntrl.net';
 const ID_HOST_COOKIELESS = 'c.ltmsphrcl.net';
+const DO_NOT_HONOR_CONFIG = false;
 
 export const storage = getStorageManager({moduleType: MODULE_TYPE_UID, moduleName: MODULE_NAME});
 let cookieDomain;
 let appliedConfig = {
-  name: "lotamePanoramaId",
+  name: 'lotamePanoramaId',
   storage: {
-    type: "cookie&html5",
-    name: "panoramaId"
+    type: 'cookie&html5',
+    name: 'panoramaId'
   }
 };
 
@@ -78,7 +79,7 @@ function getProfileId() {
   if (cookiesAreEnabled(false)) {
     profileId = storage.getCookie(KEY_PROFILE, undefined);
   }
-  if (!profileId && localStorageIsEnabled(false)) {
+  if (!profileId && localStorageIsEnabled(DO_NOT_HONOR_CONFIG)) {
     profileId = storage.getDataFromLocalStorage(KEY_PROFILE, undefined);
   }
   return profileId;
@@ -93,7 +94,7 @@ function getFromStorage(key) {
   if (cookiesAreEnabled(false)) {
     value = storage.getCookie(key, undefined);
   }
-  if (localStorageIsEnabled(false) && value === null) {
+  if (localStorageIsEnabled(DO_NOT_HONOR_CONFIG) && value === null) {
     const storedValueExp = storage.getDataFromLocalStorage(
       `${key}_exp`, undefined
     );
@@ -101,13 +102,13 @@ function getFromStorage(key) {
     if (storedValueExp === '' || storedValueExp === null) {
       value = storage.getDataFromLocalStorage(key, undefined);
     } else if (storedValueExp) {
-      let expDate = undefined;
+      let expDate;
       if (/^\d+$/.test(storedValueExp)) {
         expDate = new Date(parseInt(storedValueExp, 10));
       } else {
         expDate = new Date(storedValueExp);
       }
-      if (expDate && !isNaN(expDate) && expDate.getTime() - Date.now() > 0) { 
+      if (expDate && !isNaN(expDate) && expDate.getTime() - Date.now() > 0) {
         value = storage.getDataFromLocalStorage(key, undefined);
       }
     }
@@ -196,34 +197,34 @@ function clearLotameCache(key) {
         undefined
       );
     }
-    if (localStorageIsEnabled(false)) {
+    if (localStorageIsEnabled(DO_NOT_HONOR_CONFIG)) {
       storage.removeDataFromLocalStorage(key, undefined);
     }
   }
 }
 /**
- * @param {boolean} `honorConfig` - `false`` to override for reading or deleting old cookies
+ * @param {boolean} honorConfig - false to override for reading or deleting old cookies
  * @returns {boolean} for whether we can write the cookie
  */
-function cookiesAreEnabled(honorConfig=true) {
+function cookiesAreEnabled(honorConfig = true) {
   if (honorConfig) {
     return storage.cookiesAreEnabled() && appliedConfig.storage.type.includes('cookie');
   }
   return storage.cookiesAreEnabled();
 }
 /**
- * @param {boolean} `honorConfig` - `false`` to override for reading or deleting old cookies
+ * @param {boolean} honorConfig - false to override for reading or deleting old cookies
  * @returns {boolean} for whether we can write the cookie
  */
-function localStorageIsEnabled(honorConfig=true) {
+function localStorageIsEnabled(honorConfig = true) {
   if (honorConfig) {
     return storage.hasLocalStorage() && appliedConfig.storage.type.includes('html5');
   }
-  return storage.hasLocalStorage(); 
+  return storage.hasLocalStorage();
 }
 /**
- * @param {SubmoduleConfig} submoduleConfig
- * @returns {boolean} `true` - when there are errors, `false` - otherwise.
+ * @param {SubmoduleConfig} config
+ * @returns {boolean} - true when there are errors, false otherwise.
  */
 function checkConfigHasErrorsAndReport(config) {
   let error = false;
