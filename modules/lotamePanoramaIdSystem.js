@@ -94,24 +94,8 @@ function getFromStorage(key) {
   if (cookiesAreEnabled(false)) {
     value = storage.getCookie(key, undefined);
   }
-  if (localStorageIsEnabled(DO_NOT_HONOR_CONFIG) && value === null) {
-    const storedValueExp = storage.getDataFromLocalStorage(
-      `${key}_exp`, undefined
-    );
-
-    if (storedValueExp === '' || storedValueExp === null) {
-      value = storage.getDataFromLocalStorage(key, undefined);
-    } else if (storedValueExp) {
-      let expDate;
-      if (/^\d+$/.test(storedValueExp)) {
-        expDate = new Date(parseInt(storedValueExp, 10));
-      } else {
-        expDate = new Date(storedValueExp);
-      }
-      if (expDate && !isNaN(expDate) && expDate.getTime() - Date.now() > 0) {
-        value = storage.getDataFromLocalStorage(key, undefined);
-      }
-    }
+  if (value === null && localStorageIsEnabled(DO_NOT_HONOR_CONFIG)) {
+    value = storage.getDataFromLocalStorage(key, undefined);
   }
   return value;
 }
@@ -140,11 +124,6 @@ function saveLotameCache(
       );
     }
     if (localStorageIsEnabled()) {
-      storage.setDataInLocalStorage(
-        `${key}_exp`,
-        String(expirationTimestamp),
-        undefined
-      );
       storage.setDataInLocalStorage(key, value, undefined);
     }
   }
