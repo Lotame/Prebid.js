@@ -11,13 +11,11 @@ import {
   isBoolean,
   buildUrl,
   isEmpty,
-  isArray,
-  isEmptyStr
+  isArray
 } from '../src/utils.js';
 import { ajax } from '../src/ajax.js';
 import { submodule } from '../src/hook.js';
 import {getStorageManager} from '../src/storageManager.js';
-import { uspDataHandler } from '../src/adapterManager.js';
 import {MODULE_TYPE_UID} from '../src/activities/modules.js';
 
 /**
@@ -203,10 +201,10 @@ function localStorageIsEnabled(honorConfig = true) {
 }
 /**
  * @param {SubmoduleConfig} config
- * @returns {boolean} - true when there are errors, false otherwise.
+ * @returns {null|string} - string error if it finds one, null otherwise.
  */
 function checkConfigHasErrorsAndReport(config) {
-  let error = false;
+  let error = null;
   if (typeof config.storage !== 'undefined') {
     Object.assign(appliedConfig.storage, appliedConfig.storage, config.storage);
     const READABLE_MODULE_NAME = 'Lotame ID module';
@@ -284,18 +282,6 @@ export const lotamePanoramaIdSubmodule = {
 
     const storedUserId = getProfileId();
 
-    // Add CCPA Consent data handling
-    const usp = uspDataHandler.getConsentData();
-
-    let usPrivacy;
-    if (typeof usp !== 'undefined' && !isEmpty(usp) && !isEmptyStr(usp)) {
-      usPrivacy = usp;
-    }
-    if (!usPrivacy) {
-      // fallback to 1st party cookie
-      usPrivacy = getFromStorage('us_privacy');
-    }
-
     const getRequestHost = function() {
       if (navigator.userAgent && navigator.userAgent.indexOf('Safari') != -1 && navigator.userAgent.indexOf('Chrome') == -1) {
         return ID_HOST_COOKIELESS;
@@ -316,20 +302,8 @@ export const lotamePanoramaIdSubmodule = {
         }
         consentString = consentData.consentString;
       }
-      // If no consent string, try to read it from 1st party cookies
-      if (!consentString) {
-        consentString = getFromStorage('eupubconsent-v2');
-      }
-      if (!consentString) {
-        consentString = getFromStorage('euconsent-v2');
-      }
       if (consentString) {
         queryParams.gdpr_consent = consentString;
-      }
-
-      // Add usPrivacy to the url
-      if (usPrivacy) {
-        queryParams.us_privacy = usPrivacy;
       }
 
       // Add clientId to the url
