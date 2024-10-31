@@ -2,7 +2,6 @@ import {
   lotamePanoramaIdSubmodule,
   storage,
 } from 'modules/lotamePanoramaIdSystem.js';
-import { uspDataHandler } from 'src/adapterManager.js';
 import * as utils from 'src/utils.js';
 import { server } from 'test/mocks/xhr.js';
 import sinon from 'sinon';
@@ -19,7 +18,6 @@ describe('LotameId', function() {
   let setLocalStorageStub;
   let removeFromLocalStorageStub;
   let timeStampStub;
-  let uspConsentDataStub;
   let requestHost;
 
   const nowTimestamp = new Date().getTime();
@@ -34,7 +32,6 @@ describe('LotameId', function() {
       'removeDataFromLocalStorage'
     );
     timeStampStub = sinon.stub(utils, 'timestamp').returns(nowTimestamp);
-    uspConsentDataStub = sinon.stub(uspDataHandler, 'getConsentData');
     if (navigator.userAgent && navigator.userAgent.indexOf('Safari') != -1 && navigator.userAgent.indexOf('Chrome') == -1) {
       requestHost = 'https://c.ltmsphrcl.net/id';
     } else {
@@ -50,7 +47,6 @@ describe('LotameId', function() {
     setLocalStorageStub.restore();
     removeFromLocalStorageStub.restore();
     timeStampStub.restore();
-    uspConsentDataStub.restore();
   });
 
   describe('caching initial data received from the remote server', function () {
@@ -809,7 +805,6 @@ describe('LotameId', function() {
         let callBackSpy = sinon.spy();
 
         beforeEach(function () {
-          uspConsentDataStub.returns('1NNN');
           let submoduleCallback = lotamePanoramaIdSubmodule.getId(
             {
               params: {

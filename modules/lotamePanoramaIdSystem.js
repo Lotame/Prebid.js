@@ -190,7 +190,7 @@ function cookiesAreEnabled(honorConfig = true) {
   return storage.cookiesAreEnabled();
 }
 /**
- * @param {boolean} honorConfig - false to override for reading or deleting old cookies
+ * @param {boolean} honorConfig - false to override for reading or deleting old stored items
  * @returns {boolean} for whether we can write the cookie
  */
 function localStorageIsEnabled(honorConfig = true) {
