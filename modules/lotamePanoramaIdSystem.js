@@ -74,7 +74,7 @@ function setProfileId(profileId) {
  */
 function getProfileId() {
   let profileId;
-  if (cookiesAreEnabled(false)) {
+  if (cookiesAreEnabled(DO_NOT_HONOR_CONFIG)) {
     profileId = storage.getCookie(KEY_PROFILE, undefined);
   }
   if (!profileId && localStorageIsEnabled(DO_NOT_HONOR_CONFIG)) {
@@ -89,7 +89,7 @@ function getProfileId() {
  */
 function getFromStorage(key) {
   let value = null;
-  if (cookiesAreEnabled(false)) {
+  if (cookiesAreEnabled(DO_NOT_HONOR_CONFIG)) {
     value = storage.getCookie(key, undefined);
   }
   if (value === null && localStorageIsEnabled(DO_NOT_HONOR_CONFIG)) {
@@ -163,7 +163,7 @@ function getLotameLocalCache(clientId = undefined) {
  */
 function clearLotameCache(key) {
   if (key) {
-    if (cookiesAreEnabled(false)) {
+    if (cookiesAreEnabled(DO_NOT_HONOR_CONFIG)) {
       let expirationDate = new Date(0).toUTCString();
       storage.setCookie(
         key,
